@@ -1,2 +1,5 @@
 data/extracted/*
 data/raw/*
+data/archive/*
+.env
+volumes/*

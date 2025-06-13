@@ -1,0 +1,50 @@
+
+services:
+  postgres:
+    image: postgres:15
+    restart: always
+    env_file: .env
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./volumes/postgres_data:/var/lib/postgresql/data
+
+  pgadmin:
+    image: dpage/pgadmin4
+    restart: always
+    env_file: .env
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    volumes:
+      - ./volumes/pgadmin_data:/var/lib/pgadmin
+
+  airflow:
+    image: apache/airflow:2.9.1
+    restart: always
+    depends_on:
+      - postgres
+    env_file: .env
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=${AIRFLOW__CORE__EXECUTOR}
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=${AIRFLOW__CORE__SQL_ALCHEMY_CONN}
+      - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW__CORE__FERNET_KEY}
+      - AIRFLOW__CORE__LOAD_EXAMPLES=${AIRFLOW__CORE__LOAD_EXAMPLES}
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./volumes/dags:/opt/airflow/dags
+      - ./volumes/logs:/opt/airflow/logs
+      - ./volumes/plugins:/opt/airflow/plugins
+    user: "${AIRFLOW_UID}:${AIRFLOW_GID}"
+    command: >
+      bash -c "
+        airflow db migrate &&
+        airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@admin.com &&
+        airflow webserver
+      "
+
+volumes:
+  postgres_data:
+  pgadmin_data:
