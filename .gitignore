@@ -1,9 +1,8 @@
-data/extracted/*
-data/raw/*
-data/archive/*
-data/processed/*
+include/data/extracted/*
+include/data/raw/*
+include/data/archive/*
 .env
-volumes/*
 logs/*
 *.pyc
 *__pycache__
+

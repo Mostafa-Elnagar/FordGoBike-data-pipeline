@@ -10,11 +10,11 @@ def get_db_connection():
     """Create and return a database connection"""
     try:
         connection = psycopg2.connect(
-            host=os.getenv('POSTGRES_HOST', 'localhost'),
-            port=os.getenv('POSTGRES_PORT', '5432'),
-            database="fordgobike",
-            user=os.getenv('POSTGRES_USER', 'postgres'),
-            password=os.getenv('POSTGRES_PASSWORD', 'postgres')
+            host=os.getenv('POSTGRES_HOST'),
+            port=os.getenv('POSTGRES_PORT'),
+            database=os.getenv('DATABASE_NAME'),
+            user=os.getenv('POSTGRES_USER'),
+            password=os.getenv('POSTGRES_PASSWORD')
         )
         return connection
     except Exception as e:
@@ -26,24 +26,24 @@ def create_database():
     try:
         # Connect to default postgres database to create our database
         connection = psycopg2.connect(
-            host=os.getenv('POSTGRES_HOST', 'localhost'),
-            port=os.getenv('POSTGRES_PORT', '5432'),
-            database='postgres',
-            user=os.getenv('POSTGRES_USER', 'postgres'),
-            password=os.getenv('POSTGRES_PASSWORD', 'postgres')
+            host=os.getenv('POSTGRES_HOST'),
+            port=os.getenv('POSTGRES_PORT'),
+            database=os.getenv('POSTGRES_DEFAULT_DB'),
+            user=os.getenv('POSTGRES_USER'),
+            password=os.getenv('POSTGRES_PASSWORD')
         )
         connection.autocommit = True
         cursor = connection.cursor()
         
         # Check if database exists
-        cursor.execute("SELECT 1 FROM pg_database WHERE datname = 'fordgobike'")
+        cursor.execute(f"SELECT 1 FROM pg_database WHERE datname = '{os.getenv('DATABASE_NAME')}'")
         exists = cursor.fetchone()
         
         if not exists:
-            cursor.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier('fordgobike')))
-            print("Database 'fordgobike' created successfully")
+            cursor.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(f'{os.getenv("DATABASE_NAME")}')))
+            print(f"Database '{os.getenv("DATABASE_NAME")}' created successfully")
         else:
-            print("Database 'fordgobike' already exists")
+            print(f"Database '{os.getenv("DATABASE_NAME")}' already exists")
             
         cursor.close()
         connection.close()
@@ -106,7 +106,7 @@ def create_schema():
         cursor.execute(create_table_query)
         
         connection.commit()
-        print("Schema created successfully")
+        print("Bronze Schema created successfully")
         
         # Show table structure
         cursor.execute("""
@@ -133,7 +133,8 @@ def create_schema():
             connection.close()
         return False
 
-def main():
+
+if __name__ == "__main__":
     """Main function to initialize the database"""
     print("Initializing Ford GoBike database...")
     
@@ -144,7 +145,4 @@ def main():
     if create_schema():
         print("\nDatabase initialization completed successfully!")
     else:
-        print("\nDatabase initialization failed!")
-
-if __name__ == "__main__":
-    main() 
+        print("\nDatabase initialization failed!") 

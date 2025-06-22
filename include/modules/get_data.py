@@ -4,11 +4,22 @@ from bs4 import BeautifulSoup
 from tqdm import tqdm
 import shutil
 import zipfile
+from dotenv import load_dotenv
 
-BASE_URL = "https://s3.amazonaws.com/fordgobike-data/"
-RAW_DIR = "data/raw"
-EXTRACTED_DIR = "data/extracted"
-ARCHIVE_DIR = "data/archive"
+# Load environment variables
+load_dotenv()
+
+
+S3_BUCKET_URL = os.getenv('S3_BUCKET_URL')
+if not S3_BUCKET_URL:
+    raise ValueError("S3_BUCKET_URL environment variable is not set.")
+BASE_URL = f"{S3_BUCKET_URL}"
+
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__)).replace("include/modules","")
+print(f"Project root directory: {PROJECT_ROOT}")
+RAW_DIR = os.path.join(PROJECT_ROOT, "include/data/raw")
+EXTRACTED_DIR = os.path.join(PROJECT_ROOT, "include/data/extracted")
+ARCHIVE_DIR = os.path.join(PROJECT_ROOT, "include/data/archive")
 
 os.makedirs(RAW_DIR, exist_ok=True)
 os.makedirs(EXTRACTED_DIR, exist_ok=True)
@@ -77,5 +88,8 @@ def download_and_extract():
         except Exception as e:
             print(f"Failed to move {filename} to archive: {e}")
 
-if __name__ == "__main__":
+def main():
     download_and_extract()
+
+if __name__ == "__main__":
+    main()

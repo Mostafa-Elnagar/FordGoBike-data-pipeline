@@ -5,34 +5,43 @@ from pathlib import Path
 import csv
 from io import StringIO
 import time
-from typing import Dict
 import sys
 import warnings
 
 warnings.filterwarnings('ignore')
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__)).replace("include/sql/bronze","")
 
+current_dir = os.path.dirname(os.path.abspath(__file__))
+modules_path = os.path.abspath(os.path.join(current_dir, "../../modules"))
+if modules_path not in sys.path:
+    sys.path.append(modules_path)
 
-# Add the project root to Python path
-sys.path.append(str(Path(__file__).parent.parent.parent))
-
-from modules.get_locations import enrich_locations
+try:
+    from get_locations import enrich_locations
+except ImportError:
+    from modules.get_locations import enrich_locations
 
 
 load_dotenv()
 
-RAW_DIR = Path("data/raw")
-ARCHIVE_DIR = Path("data/archive")
-EXTRACTED_DIR = Path("data/extracted")
+RAW_DIR = os.path.join(PROJECT_ROOT, "include/data/raw")
+# Get EXTRACTED_DIR from command-line argument if provided, else use default
+if len(sys.argv) > 1:
+    EXTRACTED_DIR = Path(sys.argv[1])
+else:
+    EXTRACTED_DIR = Path(os.path.join(PROJECT_ROOT, "include/data/extracted"))
+ARCHIVE_DIR = os.path.join(PROJECT_ROOT, "include/data/archive")
+
 
 TABLE_NAME = "bronze.bike_trips"
 
 def get_connection():
     connection = psycopg2.connect(
-        host=os.getenv('POSTGRES_HOST', 'localhost'),
-        port=os.getenv('POSTGRES_PORT', '5432'),
-        database='fordgobike',
-        user=os.getenv('POSTGRES_USER', 'postgres'),
-        password=os.getenv('POSTGRES_PASSWORD', 'postgres')
+        host=os.getenv('POSTGRES_HOST') ,
+        port=os.getenv('POSTGRES_PORT') ,
+        database=os.getenv('DATABASE_NAME'),
+        user=os.getenv('POSTGRES_USER'),
+        password=os.getenv('POSTGRES_PASSWORD')
     )
     return connection
 
@@ -96,6 +105,7 @@ def load_locations():
         conn.close()
 
 def load_trips():
+    # Ensure EXTRACTED_DIR is a Path object
     files = sorted(EXTRACTED_DIR.glob("*.csv"))
     if not files:
         print("No new CSV files to load.")
@@ -111,9 +121,8 @@ def load_trips():
             print(f"Time Spent For Process {time_spent}")
             print("-"*20)
 
-def main():
-    load_trips()
-    load_locations()
+    
 
 if __name__ == "__main__":
-    main()
+    load_trips()
+    load_locations()

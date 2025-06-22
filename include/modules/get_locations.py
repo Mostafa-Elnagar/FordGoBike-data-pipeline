@@ -4,6 +4,7 @@ from typing import Dict
 from dotenv import load_dotenv
 import pandas as pd
 import numpy as np
+import os
 import tqdm
 
 load_dotenv()
@@ -42,7 +43,7 @@ def reverse_geocode(lat: float, lon: float) -> Dict:
     if elapsed < min_interval:
         time.sleep(min_interval - elapsed)
 
-    url = "https://forward-reverse-geocoding.p.rapidapi.com/v1/reverse"
+    url = f"{os.getenv('REVERSE_GEOCODE_API_URL')}"
     querystring = {
         "lat": str(lat),
         "lon": str(lon),
