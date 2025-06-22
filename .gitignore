@@ -1,8 +1,5 @@
 include/data/extracted/*
 include/data/raw/*
 include/data/archive/*
-.env
-logs/*
 *.pyc
 *__pycache__
-
