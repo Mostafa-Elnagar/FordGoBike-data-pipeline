@@ -20,7 +20,7 @@ with DAG(
     },
     start_date=datetime(2025, 6, 21, 10, 0),
     end_date=datetime(2025, 7, 23, 10, 30),
-    schedule="*/5 * * * *",
+    schedule="*/60 * * * *",
     catchup=False,
 ) as dag:
 

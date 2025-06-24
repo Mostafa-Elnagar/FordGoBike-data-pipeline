@@ -65,6 +65,7 @@ def create_schema():
         CREATE SCHEMA IF NOT EXISTS bronze;
         
         CREATE TABLE IF NOT EXISTS bronze.bike_trips (
+            trip_id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
             duration_sec INTEGER,
             start_time TIMESTAMP,
             end_time TIMESTAMP,
@@ -82,7 +83,8 @@ def create_schema():
             member_gender VARCHAR(20),
             period VARCHAR(50),
             bike_share_for_all_trip VARCHAR(10),
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            loaded_to_silver BOOLEAN DEFAULT FALSE
         );
 
         CREATE TABLE IF NOT EXISTS bronze.locations (

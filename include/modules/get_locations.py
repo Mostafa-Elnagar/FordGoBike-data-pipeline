@@ -32,6 +32,13 @@ def _fetch_latlong(conn):
 
     return locations
 
+def _fetch_enriched_locations(conn):
+    query = """
+        SELECT latitude, longitude
+        FROM bronze.locations
+    """
+    locations = pd.read_sql_query(query, conn)
+    return locations
 
 
 def reverse_geocode(lat: float, lon: float) -> Dict:
@@ -53,29 +60,29 @@ def reverse_geocode(lat: float, lon: float) -> Dict:
         "namedetails": "0"
     }
     headers = {
-        "x-rapidapi-host": "forward-reverse-geocoding.p.rapidapi.com",
-        "x-rapidapi-key": "0d3fb22caamshacbf495674a4023p16229fjsncc89dfa953a4"
+        "x-rapidapi-host": f"{os.getenv('GEOCODE_API_HOST')}",
+        "x-rapidapi-key": f"{os.getenv('GEOCODE_API_KEY')}"
     }
 
     try:
         response = requests.get(url, headers=headers, params=querystring, timeout=10)
         response.raise_for_status()
         _last_request_time[0] = time.time()
-        address = response.json().get("address",  "")
-        address_id = response.json().get("place_id",  "")
-        display_name = response.json().get("display_name",  "")
+        address = response.json().get("address", None)
+        address_id = response.json().get("place_id",  None)
+        display_name = response.json().get("display_name",  None)
         output = {
             "location_id": address_id,
             "latitude": lat,
             "longitude": lon,
-            "highway": address.get("highway", ""),
-            "road": address.get("road",  ""),
-            "neighbourhood": address.get("neighbourhood",  ""),
-            "suburb": address.get("suburb",  ""),
-            "city": address.get("city",  ""),
-            "state": address.get("state",  ""),
-            "postcode": address.get("postcode",  ""),
-            "country": address.get("country",  ""),
+            "highway": address.get("highway", None),
+            "road": address.get("road",  None),
+            "neighbourhood": address.get("neighbourhood",  None),
+            "suburb": address.get("suburb",  None),
+            "city": address.get("city",  None),
+            "state": address.get("state",  None),
+            "postcode": address.get("postcode",  None),
+            "country": address.get("country",  None),
             "display_name": display_name
         }
 
@@ -103,9 +110,14 @@ def commit_row(row, conn):
 def enrich_locations(conn):
     print("Enriching locations...")
     locations = _fetch_latlong(conn)
+    enriched_locations = _fetch_enriched_locations(conn)
+    insert_count = 0
     print(f"Found {len(locations)} locations to enrich")
     for location in tqdm.tqdm(locations.values):
         lat, long = location
         if not(int(lat) == 0 and int(long) == 0):
-            commit_row(reverse_geocode(lat, long), conn)
+            if not any((enriched_locations['latitude'] == lat) & (enriched_locations['longitude'] == long)):
+                commit_row(reverse_geocode(lat, long), conn)
+                insert_count += 1
+    print(f"Enriched {insert_count} locations")
     

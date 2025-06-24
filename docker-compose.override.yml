@@ -10,12 +10,4 @@ services:
     depends_on:
       - postgres
     networks:
-      - astro-network
-
-
-
-networks:
-  astro-network:
-    external: true
-    name: fordgobike_6c3982_airflow
-
+      - airflow
