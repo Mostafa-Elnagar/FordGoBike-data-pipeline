@@ -16,22 +16,40 @@ SELECT DISTINCT ON (location_id) *
 FROM bronze.locations
 WHERE location_id NOT IN (SELECT location_id FROM silver.dim_locations);
 
--- INSERT INTO silver.dim_user_types (
--- 	user_type_id,
--- 	user_type,
--- 	member_birth_year,
--- 	member_gender,
--- 	bike_share_for_all_trip
--- )
--- SELECT 
--- 	DISTINCT
--- 	user_type,
--- 	member_birth_year,
--- 	member_gender,
--- 	bike_share_for_all_trip
--- FROM bronze.bike_trips
--- WHERE 
+-- Data Transformations on Trips Table
+CREATE TEMP TABLE temp_updated_bike_trips 
+ON COMMIT PRESERVE ROWS
+AS 
+SELECT
+    trip_id,
+    ROUND(duration_sec / 60.0, 0)::INTEGER AS duration_min,
+    DATE_TRUNC('day', start_time)::date AS start_date,
+    DATE_TRUNC('day', end_time)::date AS end_date,
+    start_time::TIME AS start_time,
+    end_time::TIME AS end_time,
+    start_station_name,
+    start_station_latitude::FLOAT,
+    start_station_longitude::FLOAT,
+    end_station_name,
+    end_station_latitude::FLOAT,
+    end_station_longitude::FLOAT,
+    bike_id,
+    ('x' || substr(md5(
+            COALESCE(user_type, '') || '|' ||
+            COALESCE(member_birth_year::TEXT, '') || '|' ||
+            COALESCE(member_gender, '') || '|' ||
+            (
+				CASE 
+					WHEN bike_share_for_all_trip = 'Yes' THEN True
+					ELSE False
+				END
+			)::TEXT
+        ), 1, 16))::bit(64)::bigint AS user_type_id
+FROM bronze.bike_trips
+WHERE NOT loaded_to_silver;
 
+
+-- LOAD USER TYPES DIMENSION
 INSERT INTO silver.dim_user_types (
     user_type_id,
     user_type,
@@ -61,7 +79,7 @@ all_combinations AS (
     FROM 
         (SELECT unnest(ARRAY['Customer', 'Subscriber']) AS user_type) AS u,
         birth_years AS b,
-        (SELECT unnest(ARRAY['Male', 'Female', 'Unknown']) AS gender) AS g,
+        (SELECT unnest(ARRAY['Male', 'Female', 'Other', NULL]) AS gender) AS g,
         (SELECT unnest(ARRAY[TRUE, FALSE]) AS bike_share) AS bs
 ),
 final_data AS (
@@ -70,12 +88,12 @@ final_data AS (
         birth_year,
         gender,
         bike_share,
-        -- Generate a consistent surrogate key by hashing the values
+
         ('x' || substr(md5(
             COALESCE(user_type, '') || '|' ||
             COALESCE(birth_year::TEXT, '') || '|' ||
             COALESCE(gender, '') || '|' ||
-            COALESCE(bike_share::TEXT, '')
+            COALESCE(bike_share::TEXT, 'false')
         ), 1, 16))::bit(64)::bigint AS user_type_id
 		FROM all_combinations
 )
@@ -88,7 +106,10 @@ SELECT
 FROM final_data
 ON CONFLICT DO NOTHING;
 
-TRUNCATE TABLE silver.dim_date;
+
+-- LOAD DATE DIMENSION  
+DELETE FROM silver.dim_date;
+
 INSERT INTO silver.dim_date (
     date,
     year,
@@ -100,18 +121,15 @@ INSERT INTO silver.dim_date (
     day_name,
     is_weekend
 )
-WITH min_max_date AS(
-	SELECT
-		DATE_TRUNC('year', start_time) as Date
-	FROM bronze.bike_trips
-	UNION
-	SELECT
-		DATE_TRUNC('year', end_time) as Date
+WITH min_max_date AS (
+	SELECT 
+		MIN(LEAST(start_time, end_time))::DATE AS min_date,
+		MAX(GREATEST(start_time, end_time))::DATE AS max_date
 	FROM bronze.bike_trips
 ),
 dates AS (
 	SELECT 
-		generate_series(MIN(date)::DATE, MAX(date)::DATE, '1 day'::interval)::date AS date
+		generate_series(min_date, max_date, interval '1 day')::DATE AS date
 	FROM min_max_date
 )
 SELECT 
@@ -129,4 +147,42 @@ SELECT
     END AS is_weekend
 FROM dates;
 
-SELECT * FROM silver.dim_date;
+-- LOAD FACT TABLE
+INSERT INTO silver.fact_trips
+(
+	trip_id,
+	duration_min,
+	start_date,
+	end_date,
+	start_time,
+	end_time,
+	start_station_name,
+	end_station_name,
+	bike_id,
+	user_type_id,
+	start_location_id,
+	end_location_id
+)
+SELECT
+	t.trip_id,
+	t.duration_min,
+	t.start_date,
+	t.end_date,
+	t.start_time,
+	t.end_time,
+	t.start_station_name,
+	t.end_station_name,
+	t.bike_id,
+	t.user_type_id,
+	sl.location_id AS start_location_id,
+	el.location_id AS end_location_id
+FROM temp_updated_bike_trips AS t
+LEFT JOIN bronze.locations as sl
+	ON t.start_station_latitude = sl.latitude
+		AND t.start_station_longitude = sl.longitude
+LEFT JOIN bronze.locations as el
+	ON t.end_station_latitude = el.latitude
+		AND t.end_station_longitude = el.longitude;
+
+-- DROP TEMP TABLE
+DROP TABLE IF EXISTS temp_updated_bike_trips;
