@@ -11,3 +11,13 @@ services:
       - postgres
     networks:
       - airflow
+  
+  email-sender:
+    build:
+      context: ./email_sender
+      dockerfile: Dockerfile
+    image: email-sender:latest  # <-- ensures consistent tagging
+    ports:
+      - "5001:5000"
+    env_file:
+      - ./email-sender/.env
