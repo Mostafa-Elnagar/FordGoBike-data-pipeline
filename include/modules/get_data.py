@@ -21,9 +21,10 @@ RAW_DIR = os.path.join(PROJECT_ROOT, "include/data/raw")
 EXTRACTED_DIR = os.path.join(PROJECT_ROOT, "include/data/extracted")
 ARCHIVE_DIR = os.path.join(PROJECT_ROOT, "include/data/archive")
 
-os.makedirs(RAW_DIR, exist_ok=True, mode=0o777)
-os.makedirs(EXTRACTED_DIR, exist_ok=True, mode=0o777)
-os.makedirs(ARCHIVE_DIR, exist_ok=True, mode=0o777)
+# os.chmod(os.path.join(PROJECT_ROOT, "include"), 0o777)
+# os.makedirs(RAW_DIR, exist_ok=True, mode=0o777)
+# os.makedirs(EXTRACTED_DIR, exist_ok=True, mode=0o777)
+# os.makedirs(ARCHIVE_DIR, exist_ok=True, mode=0o777)
 
 def get_links():
     resp = requests.get(BASE_URL)

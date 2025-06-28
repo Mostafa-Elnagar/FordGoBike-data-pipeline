@@ -13,9 +13,6 @@ services:
       - airflow
   
   email_sender:
-    # build:
-    #   context: ./include/modules/email_sender
-    #   dockerfile: Dockerfile
     image: email_sender:latest
     ports:
       - "5000:5000"
@@ -23,3 +20,4 @@ services:
       - ./include/modules/email_sender/.env
     networks:
       - airflow
+ 
