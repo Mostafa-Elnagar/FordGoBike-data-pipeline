@@ -109,7 +109,7 @@ BEGIN
     RAISE NOTICE 'Step 3: Loading dates into silver.dim_date...';
     BEGIN
         INSERT INTO silver.dim_date (
-            date,
+            date_id, 
             year,
             month,
             month_name,
@@ -119,18 +119,21 @@ BEGIN
             day_name,
             is_weekend
         )
-        WITH min_max_date AS(
-            SELECT DATE_TRUNC('year', start_time) AS date FROM bronze.bike_trips
-            UNION
-            SELECT DATE_TRUNC('year', end_time) AS date FROM bronze.bike_trips
+        WITH min_max_date AS (
+            SELECT 
+                MIN(LEAST(start_time, end_time))::DATE AS min_date,
+                MAX(GREATEST(start_time, end_time))::DATE AS max_date
+            FROM bronze.bike_trips
         ),
         dates AS (
             SELECT 
-                generate_series(MIN(date)::DATE, (MAX(date) + INTERVAL '1 year')::DATE, '1 day'::interval)::date AS date
+                generate_series(min_date, max_date, interval '1 day')::DATE AS date
             FROM min_max_date
         )
         SELECT 
-            date,
+            (EXTRACT(YEAR FROM date)::INT * 10000) +
+			(EXTRACT(MONTH FROM date)::INT * 100) +
+			EXTRACT(DAY FROM date)::INT AS date_id,
             EXTRACT(YEAR FROM date)::INT AS year,
             EXTRACT(MONTH FROM date)::INT AS month,
             TRIM(TO_CHAR(date, 'Month')) AS month_name,
@@ -143,7 +146,7 @@ BEGIN
                 ELSE FALSE
             END AS is_weekend
         FROM dates
-        WHERE date NOT IN (SELECT date FROM silver.dim_date);
+        ON CONFLICT (date_id) DO NOTHING;
 
         RAISE NOTICE 'Step 3 completed successfully.';
     EXCEPTION
@@ -163,17 +166,23 @@ BEGIN
                 ROUND(duration_sec / 60.0)::INT AS duration_min,
                 start_time::date AS start_date_trip,
                 start_time::TIME AS start_time,
-                start_station_name AS start_station_name,
+                NULLIF(start_station_name, 'NULL') AS start_station_name,
                 end_time::date AS end_date_trip,
                 end_time::TIME AS end_time,
-                end_station_name AS end_station_name,
+                NULLIF(end_station_name, 'NULL') AS end_station_name,
                 start_station_latitude,
                 start_station_longitude,
                 end_station_latitude,
                 end_station_longitude,
                 bike_id AS bike_id,
                 user_type,
-                member_birth_year,
+                (
+                    CASE 
+                        WHEN (EXTRACT(YEAR FROM start_time)::INT - member_birth_year) < 18 THEN NULL
+                        WHEN (EXTRACT(YEAR FROM start_time)::INT - member_birth_year) > 100 THEN NULL
+                        ELSE  member_birth_year
+                    END
+                ) AS member_birth_year,
                 COALESCE(member_gender, 'Unknown') AS member_gender,
                 COALESCE(bike_share_for_all_trip, 'No') AS bike_share_for_all_trip
             FROM bronze.bike_trips AS bt
@@ -184,11 +193,11 @@ BEGIN
             trip_id,
             duration_min,
             start_location_id,
-            start_date_trip,
+            start_date_id,
             start_time,
             start_station_name,
             end_location_id,
-            end_date_trip,
+            end_date_id,
             end_time,
             end_station_name,
             bike_id,
@@ -198,11 +207,15 @@ BEGIN
             bt.trip_id,
             bt.duration_min,
             sl.location_id AS start_location_id,
-            bt.start_date_trip,
+			(EXTRACT(YEAR FROM bt.start_date_trip)::INT * 10000) +
+			(EXTRACT(MONTH FROM bt.start_date_trip)::INT * 100) +
+			EXTRACT(DAY FROM bt.start_date_trip)::INT AS start_date_id,
             bt.start_time,
             bt.start_station_name,
             el.location_id AS end_location_id,
-            bt.end_date_trip,
+			(EXTRACT(YEAR FROM bt.end_date_trip)::INT * 10000) +
+			(EXTRACT(MONTH FROM bt.end_date_trip)::INT * 100) +
+			EXTRACT(DAY FROM bt.end_date_trip)::INT AS end_date_id,
             bt.end_time,
             bt.end_station_name,
             bt.bike_id,
@@ -250,3 +263,4 @@ BEGIN
 
 END;
 $$;
+CALL silver.run_full_etl();

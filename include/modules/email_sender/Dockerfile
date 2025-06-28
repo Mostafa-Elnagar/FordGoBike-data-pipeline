@@ -4,11 +4,11 @@ WORKDIR /usr/src/app
 
 COPY package*.json ./
 
+RUN npm install
+
 RUN chown -R node:node /usr/src/app
 
 USER node
-
-RUN npm install
 
 COPY --chown=node:node . .
 

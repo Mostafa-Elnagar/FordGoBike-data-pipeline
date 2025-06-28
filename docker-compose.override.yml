@@ -12,12 +12,14 @@ services:
     networks:
       - airflow
   
-  email-sender:
-    build:
-      context: ./email_sender
-      dockerfile: Dockerfile
-    image: email-sender:latest  # <-- ensures consistent tagging
+  email_sender:
+    # build:
+    #   context: ./include/modules/email_sender
+    #   dockerfile: Dockerfile
+    image: email_sender:latest
     ports:
-      - "5001:5000"
+      - "5000:5000"
     env_file:
-      - ./email-sender/.env
+      - ./include/modules/email_sender/.env
+    networks:
+      - airflow

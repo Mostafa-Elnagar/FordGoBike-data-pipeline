@@ -41,9 +41,9 @@ def _fetch_enriched_locations(conn):
     return locations
 
 
-def reverse_geocode(lat: float, lon: float) -> Dict:
+def reverse_geocode(lat: float, lon: float, api_key) -> Dict:
 
-    min_interval = 0.8
+    min_interval = 0.05
     now = time.time()
     elapsed = now - _last_request_time[0]
     
@@ -61,7 +61,7 @@ def reverse_geocode(lat: float, lon: float) -> Dict:
     }
     headers = {
         "x-rapidapi-host": f"{os.getenv('GEOCODE_API_HOST')}",
-        "x-rapidapi-key": f"{os.getenv('GEOCODE_API_KEY')}"
+        "x-rapidapi-key": api_key
     }
 
     try:
@@ -112,12 +112,13 @@ def enrich_locations(conn):
     locations = _fetch_latlong(conn)
     enriched_locations = _fetch_enriched_locations(conn)
     insert_count = 0
+    api_keys = [os.getenv(f'GEOCODE_API_KEY{i}') for i in range(1, int(os.getenv('GEOCODE_KEY_COUNT')) + 1)]
     print(f"Found {len(locations)} locations to enrich")
     for location in tqdm.tqdm(locations.values):
         lat, long = location
         if not(int(lat) == 0 and int(long) == 0):
             if not any((enriched_locations['latitude'] == lat) & (enriched_locations['longitude'] == long)):
-                commit_row(reverse_geocode(lat, long), conn)
+                commit_row(reverse_geocode(lat, long, api_keys[(insert_count) % len(api_keys)]), conn)
                 insert_count += 1
     print(f"Enriched {insert_count} locations")
     

@@ -1,13 +1,22 @@
 from airflow import DAG
 from airflow.operators.bash import BashOperator
-from airflow.operators.python import PythonOperator
 from datetime import datetime
+from datetime import timedelta
 import os
-from pathlib import Path
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
+import sys
+
+from dotenv import load_dotenv
+
+load_dotenv()
 
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__)).replace("dags","")
+if PROJECT_ROOT not in sys.path:
+    sys.path.append(PROJECT_ROOT)
 
 EXTRACTED_DIR = os.path.join(PROJECT_ROOT, "include/data/extracted")
+
+from include.modules.email_sender.sender import task_failure_alert
 
 with DAG(
     dag_id="bronze_dag",
@@ -16,27 +25,31 @@ with DAG(
     default_args={
         "owner": "airflow",
         "retries": 2,
-        "retry_delay": 60,
+        "retry_delay": timedelta(seconds=15),
     },
-    start_date=datetime(2025, 6, 21, 10, 0),
-    end_date=datetime(2025, 7, 23, 10, 30),
-    schedule="*/60 * * * *",
+    start_date=None,
+    end_date=None,
+    schedule="@daily",
     catchup=False,
 ) as dag:
 
     extract_task = BashOperator(
         task_id="extract_data",
         bash_command=f"python {os.path.join(PROJECT_ROOT, 'include/modules/get_data.py')} {EXTRACTED_DIR}",
-    )
-
-    init_database = BashOperator(
-        task_id="initialize_database",
-        bash_command=f"python {os.path.join(PROJECT_ROOT, 'include/sql/bronze/init_db.py')}",
+        on_failure_callback=task_failure_alert,
     )
 
     load_task = BashOperator(
         task_id="load_data",
         bash_command=f"python {os.path.join(PROJECT_ROOT, 'include/sql/bronze/load_bronze.py')} {EXTRACTED_DIR}",
+        on_failure_callback=task_failure_alert,
     )
 
-    extract_task >> init_database >> load_task
+    trigger_silver = TriggerDagRunOperator(
+        task_id='trigger_silver_dag',
+        trigger_dag_id='silver_dag',  
+        wait_for_completion=False,    
+        reset_dag_run=True,           
+    )
+
+    extract_task >> load_task >> trigger_silver
