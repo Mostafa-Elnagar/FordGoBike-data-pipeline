@@ -15,13 +15,13 @@ _last_request_time = [0.0]  # Mutable to keep state across calls
 
 def _fetch_latlong(conn):
     query = """
-        SELECT DISTINCT *
+        SELECT *
         FROM (
             SELECT 
                 start_station_latitude AS latitude,
                 start_station_longitude AS longitude
             FROM bronze.bike_trips
-            UNION ALL
+            UNION
             SELECT 
                 end_station_latitude AS latitude,
                 end_station_longitude AS longitude
@@ -114,8 +114,7 @@ def enrich_locations(conn):
     insert_count = 0
     api_keys = [os.getenv(f'GEOCODE_API_KEY{i}') for i in range(1, int(os.getenv('GEOCODE_KEY_COUNT')) + 1)]
     print(f"Found {len(locations)} locations to enrich")
-    for location in tqdm.tqdm(locations.values):
-        lat, long = location
+    for lat, long in tqdm.tqdm(locations.values):
         if not(int(lat) == 0 and int(long) == 0):
             if not any((enriched_locations['latitude'] == lat) & (enriched_locations['longitude'] == long)):
                 commit_row(reverse_geocode(lat, long, api_keys[(insert_count) % len(api_keys)]), conn)

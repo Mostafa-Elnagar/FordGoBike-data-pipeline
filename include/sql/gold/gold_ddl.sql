@@ -7,7 +7,7 @@ CREATE SCHEMA IF NOT EXISTS gold;
 ------------------------------------------------------------------------------------
 
 
--- Materialized View 1: Daily Trip Summary
+-- Materialized View 1:  Trip Summary
 CREATE MATERIALIZED VIEW IF NOT EXISTS gold.dm_daily_trip_summary AS
 SELECT
     EXTRACT(HOUR FROM ft.start_time) AS start_hour,
@@ -25,49 +25,92 @@ JOIN silver.dim_date d ON ft.start_date_id = d.date_id
 GROUP BY
     EXTRACT(HOUR FROM ft.start_time), d.date_id, d.year, d.month_name, d.day_name, d.is_weekend;
 
--- Materialized View 2: Station Popularity
 CREATE MATERIALIZED VIEW IF NOT EXISTS gold.dm_station_popularity AS
+
+-- CTE to count all trips starting from each distinct station.
+-- This assumes a standard star schema where fact tables join to dimension tables on IDs.
 WITH starts AS (
-    SELECT start_station_name AS station_name, COUNT(trip_id) AS total_starts
-    FROM silver.fact_trips
-    GROUP BY start_station_name
+    SELECT
+        dl.station_name,
+        COUNT(ft.trip_id) AS total_starts
+    FROM silver.fact_trips AS ft
+    -- Join with the locations dimension on the starting location ID to get the station name.
+    JOIN silver.dim_locations AS dl ON ft.start_location_id = dl.location_id
+    GROUP BY dl.station_name
 ),
+
+-- CTE to count all trips ending at each distinct station.
 ends AS (
-    SELECT end_station_name AS station_name, COUNT(trip_id) AS total_ends
-    FROM silver.fact_trips
-    GROUP BY end_station_name
+    SELECT
+        dl.station_name,
+        COUNT(ft.trip_id) AS total_ends
+    FROM silver.fact_trips AS ft
+    -- Join with the locations dimension on the ending location ID to get the station name.
+    JOIN silver.dim_locations AS dl ON ft.end_location_id = dl.location_id
+    GROUP BY dl.station_name
+),
+
+-- CTE to get unique station details (city, coordinates, etc.).
+-- This is more efficient than joining back to the main fact table later.
+station_details AS (
+    SELECT
+        station_name,
+        -- Use an aggregate function (like MAX) to ensure one row per station,
+        -- handling potential duplicate entries in the dimension table gracefully.
+        MAX(city) AS city,
+        MAX(latitude) AS latitude,
+        MAX(longitude) AS longitude,
+        MAX(display_name) AS display_name
+    FROM silver.dim_locations
+    WHERE station_name IS NOT NULL
+    GROUP BY station_name
 )
+
+-- Final SELECT statement to combine the aggregated data into the final view.
 SELECT
+    -- Use COALESCE to get the station name from either the starts or ends CTE.
+    -- This handles stations that are only used for starts or only for ends.
     COALESCE(s.station_name, e.station_name) AS station_name,
-    (ARRAY_AGG(loc.city ORDER BY ft.start_time DESC LIMIT 1))[1] AS city,
-    (ARRAY_AGG(loc.state ORDER BY ft.start_time DESC LIMIT 1))[1] AS state,
-    (ARRAY_AGG(loc.latitude ORDER BY ft.start_time DESC LIMIT 1))[1] AS latitude,
-    (ARRAY_AGG(loc.longitude ORDER BY ft.start_time DESC LIMIT 1))[1] AS longitude,
+    sd.city,
+    sd.latitude,
+    sd.longitude,
+    sd.display_name,
+    -- If a station has no starts or no ends, COALESCE ensures the count is 0 instead of NULL.
     COALESCE(s.total_starts, 0) AS total_trips_started,
     COALESCE(e.total_ends, 0) AS total_trips_ended,
+    -- Calculate the net flow of bikes (positive means more bikes left than arrived).
     (COALESCE(s.total_starts, 0) - COALESCE(e.total_ends, 0)) AS net_flow,
+    -- Calculate the total number of trips (starts + ends) associated with the station.
     (COALESCE(s.total_starts, 0) + COALESCE(e.total_ends, 0)) AS total_trips
 FROM starts s
+-- A FULL OUTER JOIN ensures that we don't miss any stations that only have starts or only have ends.
 FULL OUTER JOIN ends e ON s.station_name = e.station_name
-LEFT JOIN silver.fact_trips ft ON COALESCE(s.station_name, e.station_name) = ft.start_station_name
-LEFT JOIN silver.dim_locations loc ON ft.start_location_id = loc.location_id
-WHERE COALESCE(s.station_name, e.station_name) IS NOT NULL
-GROUP BY COALESCE(s.station_name, e.station_name), s.total_starts, e.total_ends;
+-- Cleanly join the station details using the definitive station name.
+LEFT JOIN station_details sd ON sd.station_name = COALESCE(s.station_name, e.station_name)
+-- Filter out any potential NULL station names that might result from data quality issues.
+WHERE COALESCE(s.station_name, e.station_name) IS NOT NULL;
 
 -- Materialized View 3: Popular Routes
 CREATE MATERIALIZED VIEW IF NOT EXISTS gold.dm_popular_routes AS
 SELECT
-    ft.start_station_name || ' -> ' || ft.end_station_name AS route_id,
-    ft.start_station_name,
-    ft.end_station_name,
+    sl.station_name || ' -> ' || el.station_name AS route_id,
+    sl.station_name AS start_station_name,
+    el.station_name AS end_station_name,
+    ft.start_location_id,
+    ft.end_location_id,
     COUNT(ft.trip_id) AS trip_count,
     AVG(ft.duration_min) AS avg_duration_min
 FROM silver.fact_trips AS ft
-JOIN 
-WHERE start_station_name IS NOT NULL AND end_station_name IS NOT NULL
+LEFT JOIN silver.dim_locations AS sl
+    ON ft.start_location_id = sl.location_id
+LEFT JOIN silver.dim_locations AS el
+    ON ft.end_location_id = el.location_id
+WHERE sl.station_name IS NOT NULL AND el.station_name IS NOT NULL
 GROUP BY
-    start_station_name,
-    end_station_name;
+    sl.station_name,
+    el.station_name,
+    ft.start_location_id,
+    ft.end_location_id;
 
 -- Materialized View 4: User Behavior Summary
 CREATE MATERIALIZED VIEW IF NOT EXISTS gold.dm_user_behavior_summary AS
@@ -75,17 +118,18 @@ SELECT
     ut.user_type,
     ut.member_gender,
     ut.bike_share_for_all_trip,
-    (dt.year - ut.member_birth_year) AS age
+    (dt.year - ut.member_birth_year) AS age,
     COUNT(ft.trip_id) AS total_trips,
     SUM(ft.duration_min) AS total_duration_min,
     AVG(ft.duration_min) AS avg_duration_min
 FROM silver.fact_trips ft
 JOIN silver.dim_user_types ut ON ft.user_type_id = ut.user_type_id
-JOIN silver.dim_date dt ON ft.date_id = dt.date_id 
+JOIN silver.dim_date dt ON ft.start_date_id = dt.date_id 
 GROUP BY
     ut.user_type,
     ut.member_gender,
-    ut.bike_share_for_all_trip;
+    ut.bike_share_for_all_trip,
+    (dt.year - ut.member_birth_year);
 
 -- normal View 1: gold.dim_locations_view
 CREATE OR REPLACE VIEW gold.dim_locations_view AS
@@ -101,7 +145,8 @@ SELECT
     state AS state_name,
     postcode AS postal_code,
     country AS country_name,
-    display_name AS full_display_name
+    display_name AS full_address,
+    station_name
 FROM silver.dim_locations;
 
 
@@ -140,11 +185,9 @@ SELECT
     start_location_id AS start_location,
     start_date_id AS start_date,
     start_time AS start_time_of_day,
-    start_station_name AS start_station,
     end_location_id AS end_location,
     end_date_id AS end_date,
     end_time AS end_time_of_day,
-    end_station_name AS end_station,
     bike_id AS bike_identifier,
     user_type_id AS user_type
 FROM silver.fact_trips;

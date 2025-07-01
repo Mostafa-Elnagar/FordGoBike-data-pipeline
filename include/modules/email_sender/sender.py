@@ -38,6 +38,3 @@ def task_failure_alert(context):
 
     send_email_via_api(msg)
 
-
-if __name__ == "__main__":
-    send_email_via_api("lllllllll")

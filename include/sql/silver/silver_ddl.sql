@@ -7,7 +7,7 @@ BEGIN
   -- dim_locations
   EXECUTE '
     CREATE TABLE IF NOT EXISTS silver.dim_locations (
-      location_id VARCHAR(50) PRIMARY KEY,
+      location_id BIGINT PRIMARY KEY,
       latitude FLOAT,
       longitude FLOAT,
       highway VARCHAR(256),
@@ -18,7 +18,8 @@ BEGIN
       state VARCHAR(256),
       postcode VARCHAR(50),
       country VARCHAR(256),
-      display_name VARCHAR(256)
+      display_name VARCHAR(256),
+      station_name VARCHAR(256)
     )';
 
   -- dim_user_types
@@ -50,14 +51,12 @@ BEGIN
     CREATE TABLE IF NOT EXISTS silver.fact_trips (
       trip_id INTEGER PRIMARY KEY,
       duration_min INT,
-      start_location_id VARCHAR(50),
+      start_location_id BIGINT,
       start_date_id INT,
       start_time TIME,
-      start_station_name VARCHAR(256),
-      end_location_id VARCHAR(50),
+      end_location_id BIGINT,
       end_date_id INT,
       end_time TIME,
-      end_station_name VARCHAR(256),
       bike_id VARCHAR(50),
       user_type_id BIGINT,
       CONSTRAINT fk_start_date FOREIGN KEY (start_date_id) REFERENCES silver.dim_date(date_id),

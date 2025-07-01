@@ -3,3 +3,4 @@ include/data/raw/*
 include/data/archive/*
 *.pyc
 *__pycache__
+dashboards/*
