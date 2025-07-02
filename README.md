@@ -107,7 +107,7 @@ FordGoBike-data-pipeline/
 3. **Build the email_sender image**  
    From the project root, run:
    ```bash
-   docker build -f include/modules/email_sender/Dockerfile -t email-sender:latest include/modules/email_sender
+   docker build -f include/modules/email_sender/Dockerfile -t email_sender:latest include/modules/email_sender
    ```
 4. **Install Astronomer CLI** (if not already installed)
    ```bash
@@ -208,6 +208,8 @@ Each DAG is modular and triggers the next stage. Failure in any task triggers an
   ```
 - **Dockerized**: Runs as a service in `docker-compose.override.yml`
 - **Environment**: Configure Gmail App Password for secure sending
+
+This module is originally based on [KareemEhab/email-sender](https://github.com/KareemEhab/email-sender) with some modifications.  
 
 ---
 

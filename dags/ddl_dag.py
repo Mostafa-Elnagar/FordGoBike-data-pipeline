@@ -63,4 +63,4 @@ with DAG(
         reset_dag_run=True,  
     )
 
-    init_database >> [silver_ddl, gold_ddl] >> trigger_bronze
+    init_database >> silver_ddl >> gold_ddl >> trigger_bronze

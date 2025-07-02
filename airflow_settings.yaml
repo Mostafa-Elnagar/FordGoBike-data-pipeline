@@ -16,9 +16,13 @@ airflow:
       conn_port: 5432
       conn_extra: {}
   pools:
-    - pool_name:
-      pool_slot:
-      pool_description:
+    - pool_name: 
+      pool_slot: 
+      pool_description: 
   variables:
     - variable_name:
       variable_value:
+  config:
+    api:
+      auth_backend: "airflow.api.auth.backend.basic_auth"
+
