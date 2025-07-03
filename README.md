@@ -43,8 +43,6 @@ This project automates the end-to-end workflow for Ford GoBike trip data, from r
 
 ![Airflow Pipeline Diagram](assets/images/airflow_diagram.jpg)
 
----
-
 ## Features
 
 - **Multi-layer ETL**: Bronze (raw), Silver (cleaned/enriched), Gold (analytics)
@@ -55,6 +53,128 @@ This project automates the end-to-end workflow for Ford GoBike trip data, from r
 - **Data exploration notebook** for analysis and validation
 
 ---
+
+---
+
+## Dashboards & Visualizations
+
+This project includes a set of interactive Power BI dashboards to help you explore and analyze Ford GoBike data. Below are the main dashboard pages and their purposes, with animated previews:
+
+### Overview Page
+Provides a high-level summary of bike usage, key metrics, and trends across the system.
+
+![Overview Dashboard](assets/images/dashboard/overview_page.gif)
+
+### Client Type Page
+Breaks down trip statistics by user type (e.g., Subscriber vs. Customer), helping to understand user demographics and behaviors.
+
+![Client Type Dashboard](assets/images/dashboard/client_type_page.gif)
+
+### Locations Page
+Visualizes the geographical distribution of stations and trip flows, highlighting popular start/end locations and spatial patterns.
+
+![Locations Dashboard](assets/images/dashboard/locations_page.gif)
+
+### Time Analysis Page
+Analyzes temporal trends in bike usage, such as hourly, daily, and monthly patterns, to uncover peak usage times and seasonality.
+
+![Time Analysis Dashboard](assets/images/dashboard/time_analysis_page.gif)
+
+
+---
+
+## Database Schema
+
+The main `bike_trips` table (bronze layer) includes:
+
+| Column                   | Type         | Description                        |
+|--------------------------|--------------|------------------------------------|
+| id                       | SERIAL       | Primary key                        |
+| duration_sec             | INTEGER      | Trip duration in seconds           |
+| start_time               | TIMESTAMP    | Trip start time                    |
+| end_time                 | TIMESTAMP    | Trip end time                      |
+| start_station_id         | FLOAT        | Starting station ID                |
+| ...                      | ...          | ...                                |
+| bike_share_for_all_trip  | VARCHAR(10)  | Bike share for all trip indicator  |
+| created_at               | TIMESTAMP    | Record creation timestamp          |
+
+See `include/sql/bronze/init_db.py` and `include/sql/silver/`, `include/sql/gold/` for full schema and transformations.
+
+---
+
+### Silver Layer Schema
+
+![Database Schema Diagram](assets/images/Database_digram.png)
+
+*Entity-relationship diagram of the main tables and relationships in the Ford GoBike database (Silver Layer).* 
+
+---
+The Silver layer is a star schema designed for analytics, consisting of dimension and fact tables:
+
+#### `silver.dim_locations`
+| Column         | Type         | Description                |
+|---------------|--------------|----------------------------|
+| location_id    | BIGINT       | Primary key                |
+| latitude       | FLOAT        | Latitude of the location   |
+| longitude      | FLOAT        | Longitude of the location  |
+| highway        | VARCHAR(256) | Highway name (if any)      |
+| road           | VARCHAR(256) | Road name (if any)         |
+| neighbourhood  | VARCHAR(256) | Neighbourhood name         |
+| suburb         | VARCHAR(256) | Suburb name                |
+| city           | VARCHAR(256) | City name                  |
+| state          | VARCHAR(256) | State name                 |
+| postcode       | VARCHAR(50)  | Postal code                |
+| country        | VARCHAR(256) | Country                    |
+| display_name   | VARCHAR(256) | Full display name          |
+| station_name   | VARCHAR(256) | Station name               |
+
+#### `silver.dim_user_types`
+| Column                | Type         | Description                        |
+|-----------------------|--------------|------------------------------------|
+| user_type_id          | BIGINT       | Primary key                        |
+| user_type             | VARCHAR(50)  | User type (e.g., Subscriber)       |
+| member_birth_year     | INTEGER      | Birth year of the member           |
+| member_gender         | VARCHAR(20)  | Gender of the member               |
+| bike_share_for_all_trip | VARCHAR(20)| Bike share for all trip indicator  |
+
+#### `silver.dim_date`
+| Column       | Type    | Description                |
+|--------------|---------|----------------------------|
+| date_id      | INT     | Primary key                |
+| year         | INT     | Year                       |
+| month        | INT     | Month (number)             |
+| month_name   | TEXT    | Month (name)               |
+| day          | INT     | Day of month               |
+| quarter      | INT     | Quarter of year            |
+| day_of_week  | INT     | Day of week (number)       |
+| day_name     | TEXT    | Day of week (name)         |
+| is_weekend   | BOOLEAN | Weekend indicator          |
+
+#### `silver.fact_trips`
+| Column            | Type      | Description                                 |
+|-------------------|-----------|---------------------------------------------|
+| trip_id           | INTEGER   | Primary key                                 |
+| duration_min      | INT       | Trip duration in minutes                    |
+| start_location_id | BIGINT    | FK to dim_locations (start)                 |
+| start_date_id     | INT       | FK to dim_date (start)                      |
+| start_time        | TIME      | Trip start time                             |
+| end_location_id   | BIGINT    | FK to dim_locations (end)                   |
+| end_date_id       | INT       | FK to dim_date (end)                        |
+| end_time          | TIME      | Trip end time                               |
+| bike_id           | VARCHAR(50) | Bike identifier                           |
+| user_type_id      | BIGINT    | FK to dim_user_types                        |
+
+**Foreign Keys:**
+- `start_date_id`, `end_date_id` → `silver.dim_date(date_id)`
+- `start_location_id`, `end_location_id` → `silver.dim_locations(location_id)`
+- `user_type_id` → `silver.dim_user_types(user_type_id)`
+
+**Indexes:**
+- On all foreign keys and `bike_id` for efficient analytics queries.
+
+---
+
+
 
 ## Directory Structure
 
@@ -206,131 +326,12 @@ This module is originally based on [KareemEhab/email-sender](https://github.com/
 
 ---
 
-## Database Schema
-
-The main `bike_trips` table (bronze layer) includes:
-
-| Column                   | Type         | Description                        |
-|--------------------------|--------------|------------------------------------|
-| id                       | SERIAL       | Primary key                        |
-| duration_sec             | INTEGER      | Trip duration in seconds           |
-| start_time               | TIMESTAMP    | Trip start time                    |
-| end_time                 | TIMESTAMP    | Trip end time                      |
-| start_station_id         | FLOAT        | Starting station ID                |
-| ...                      | ...          | ...                                |
-| bike_share_for_all_trip  | VARCHAR(10)  | Bike share for all trip indicator  |
-| created_at               | TIMESTAMP    | Record creation timestamp          |
-
-See `include/sql/bronze/init_db.py` and `include/sql/silver/`, `include/sql/gold/` for full schema and transformations.
-
----
-
-### Silver Layer Schema
-
-The Silver layer is a star schema designed for analytics, consisting of dimension and fact tables:
-
-#### `silver.dim_locations`
-| Column         | Type         | Description                |
-|---------------|--------------|----------------------------|
-| location_id    | BIGINT       | Primary key                |
-| latitude       | FLOAT        | Latitude of the location   |
-| longitude      | FLOAT        | Longitude of the location  |
-| highway        | VARCHAR(256) | Highway name (if any)      |
-| road           | VARCHAR(256) | Road name (if any)         |
-| neighbourhood  | VARCHAR(256) | Neighbourhood name         |
-| suburb         | VARCHAR(256) | Suburb name                |
-| city           | VARCHAR(256) | City name                  |
-| state          | VARCHAR(256) | State name                 |
-| postcode       | VARCHAR(50)  | Postal code                |
-| country        | VARCHAR(256) | Country                    |
-| display_name   | VARCHAR(256) | Full display name          |
-| station_name   | VARCHAR(256) | Station name               |
-
-#### `silver.dim_user_types`
-| Column                | Type         | Description                        |
-|-----------------------|--------------|------------------------------------|
-| user_type_id          | BIGINT       | Primary key                        |
-| user_type             | VARCHAR(50)  | User type (e.g., Subscriber)       |
-| member_birth_year     | INTEGER      | Birth year of the member           |
-| member_gender         | VARCHAR(20)  | Gender of the member               |
-| bike_share_for_all_trip | VARCHAR(20)| Bike share for all trip indicator  |
-
-#### `silver.dim_date`
-| Column       | Type    | Description                |
-|--------------|---------|----------------------------|
-| date_id      | INT     | Primary key                |
-| year         | INT     | Year                       |
-| month        | INT     | Month (number)             |
-| month_name   | TEXT    | Month (name)               |
-| day          | INT     | Day of month               |
-| quarter      | INT     | Quarter of year            |
-| day_of_week  | INT     | Day of week (number)       |
-| day_name     | TEXT    | Day of week (name)         |
-| is_weekend   | BOOLEAN | Weekend indicator          |
-
-#### `silver.fact_trips`
-| Column            | Type      | Description                                 |
-|-------------------|-----------|---------------------------------------------|
-| trip_id           | INTEGER   | Primary key                                 |
-| duration_min      | INT       | Trip duration in minutes                    |
-| start_location_id | BIGINT    | FK to dim_locations (start)                 |
-| start_date_id     | INT       | FK to dim_date (start)                      |
-| start_time        | TIME      | Trip start time                             |
-| end_location_id   | BIGINT    | FK to dim_locations (end)                   |
-| end_date_id       | INT       | FK to dim_date (end)                        |
-| end_time          | TIME      | Trip end time                               |
-| bike_id           | VARCHAR(50) | Bike identifier                           |
-| user_type_id      | BIGINT    | FK to dim_user_types                        |
-
-**Foreign Keys:**
-- `start_date_id`, `end_date_id` → `silver.dim_date(date_id)`
-- `start_location_id`, `end_location_id` → `silver.dim_locations(location_id)`
-- `user_type_id` → `silver.dim_user_types(user_type_id)`
-
-**Indexes:**
-- On all foreign keys and `bike_id` for efficient analytics queries.
-
----
-
-### Database Diagram
-
-![Database Schema Diagram](assets/images/Database_digram.png)
-
-*Entity-relationship diagram of the main tables and relationships in the Ford GoBike database (Silver Layer).* 
-
----
 
 ## Data Exploration
 
 - **Notebook**: `notebooks/data_exploration.ipynb`
 - **Purpose**: Explore, validate, and analyze the processed data using pandas and numpy.
 - **How to use**: Open in JupyterLab or VSCode and run cells for summary statistics, missing value analysis, and station mapping.
-
----
-
-## Dashboards & Visualizations
-
-This project includes a set of interactive Power BI dashboards to help you explore and analyze Ford GoBike data. Below are the main dashboard pages and their purposes, with animated previews:
-
-### Overview Page
-Provides a high-level summary of bike usage, key metrics, and trends across the system.
-
-![Overview Dashboard](assets/images/dashboard/overview_page.gif)
-
-### Client Type Page
-Breaks down trip statistics by user type (e.g., Subscriber vs. Customer), helping to understand user demographics and behaviors.
-
-![Client Type Dashboard](assets/images/dashboard/client_type_page.gif)
-
-### Locations Page
-Visualizes the geographical distribution of stations and trip flows, highlighting popular start/end locations and spatial patterns.
-
-![Locations Dashboard](assets/images/dashboard/locations_page.gif)
-
-### Time Analysis Page
-Analyzes temporal trends in bike usage, such as hourly, daily, and monthly patterns, to uncover peak usage times and seasonality.
-
-![Time Analysis Dashboard](assets/images/dashboard/time_analysis_page.gif)
 
 ---
 
