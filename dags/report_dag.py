@@ -27,9 +27,9 @@ with DAG(
     catchup=False,
 ) as dag:
     
-    send_email_dags_overview = PythonOperator(
-        task_id="send_email_dags_overview",
+    email_dags_execution = PythonOperator(
+        task_id="email_dags_overview",
         python_callable=email_dags_overview,
     )
 
-    send_email_dags_overview
+    email_dags_execution
