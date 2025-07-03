@@ -37,20 +37,6 @@ This project automates the end-to-end workflow for Ford GoBike trip data, from r
 ---
 
 ## Architecture
-
-```mermaid
-graph TD
-    S3[Ford GoBike S3 Data] -->|Download| Bronze[Bronze Layer: Raw Data]
-    Bronze -->|ETL| Silver[Silver Layer: Cleaned/Enriched Data]
-    Silver -->|Transform| Gold[Gold Layer: Analytics Data Marts]
-    Airflow[Airflow DAGs] --> Bronze
-    Airflow --> Silver
-    Airflow --> Gold
-    Airflow -->|Failure Alerts| Email[Email Sender Service]
-    User[User/Analyst] -->|Query| PostgreSQL
-    User -->|Explore| Notebook[Jupyter Notebook]
-```
-
 ---
 
 ### Airflow Pipeline Diagram
