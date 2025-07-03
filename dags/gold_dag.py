@@ -1,6 +1,6 @@
 from airflow import DAG
 from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
-from airflow.operators.python import PythonOperator
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 
 import os
 
@@ -11,7 +11,7 @@ PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__)).replace("dags","")
 if PROJECT_ROOT not in sys.path:
     sys.path.append(PROJECT_ROOT)
 
-from include.modules.email_sender.sender import task_failure_alert, email_dags_overview
+from include.modules.email_sender.sender import task_failure_alert
 
 
 with DAG(
@@ -60,9 +60,11 @@ with DAG(
         autocommit=True,
         on_failure_callback=task_failure_alert,
     )
-    send_email_dags_overview = PythonOperator(
-        task_id="send_email_dags_overview",
-        python_callable=email_dags_overview,
+
+    trigger_report_dag = TriggerDagRunOperator(
+        task_id="trigger_report_dag",
+        trigger_dag_id="report_dag",
+        wait_for_completion=False,
     )
 
-    [refresh_daily_dm, refresh_stations_dm, refresh_routes_dm, refresh_users_dm] >> send_email_dags_overview
+    [refresh_daily_dm, refresh_stations_dm, refresh_routes_dm, refresh_users_dm] >> trigger_report_dag
